@@ -2,14 +2,14 @@
  * 握緊握力球打氣（至少 1 秒），放開那一瞬間的握力決定火箭飛多高。
  * 不直接碰 DOM：由 app.js 提供 env（握力球、存檔、音效、建立畫布），所以也能在 Node 裡測試。
  * iPad iOS 12（Bluefy）相容：不用 ?. ?? 、class 欄位、Array.at、roundRect 等新語法。
- * 邏輯座標固定 960x540：右側 240 是紀錄欄，收合後主畫面佔滿 960。寫實風背景由 art.js（RocketArt）繪製並快取。
+ * 邏輯寬度固定 960，高度依螢幕比例 540～760（iPad 4:3 是 720，不留上下黑邊）：右側 240 是紀錄欄，收合後主畫面佔滿 960。寫實風背景由 art.js（RocketArt）繪製並快取。
  */
 (function (root) {
   'use strict';
 
-  var VERSION = '2026.10.19-5';   // 每次發佈都改，畫面右下角會顯示
+  var VERSION = '2026.10.19-6';   // 每次發佈都改，畫面右下角會顯示
   var A = root.RocketArt || (typeof require !== 'undefined' ? require('./art.js') : null);
-  var W = 960, H = 540, SCENE_W = 720, PANEL_W = W - SCENE_W, ZONE_PX = 540, CAM0 = 0.4, ART_PAD_X = 440;
+  var W = 960, H = 540, H_MIN = 540, H_MAX = 760, SCENE_W = 720, PANEL_W = W - SCENE_W, ZONE_PX = 540, CAM0 = 0.4, ART_PAD_X = 440;
   var START_FORCE = 3.0, RELEASE_FORCE = 1.5, PUMP_MIN = 1.0, PEAK_WINDOW = 0.6;
   var FONT = '"PingFang TC", "Heiti TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif';
   var TEXT = [240, 238, 245], DIM = [150, 146, 165], GOLD = [255, 205, 70], GREEN = [96, 220, 150], RED = [255, 90, 90];
@@ -501,9 +501,9 @@
     A.drawSky(ctx, sw, H, cam);
     var starA = clamp((cam - 6.0) / 1.5);   // 星空與銀河（慢慢往下捲動）
     if (starA > 0) {
-      var off = (cam * 40) % H;
+      var off = (cam * 40) % 540;
       ctx.globalAlpha = starA;
-      ctx.drawImage(art.space, 0, off - H); ctx.drawImage(art.space, 0, off);
+      for (var sy = off - 540; sy < H; sy += 540) ctx.drawImage(art.space, 0, sy);
       ctx.globalAlpha = 1;
     }
     if (cam > 5.3) A.drawEarth(ctx, sw, H, cam, art.earth);
@@ -644,7 +644,7 @@
     A.drawPump(ctx, rx - 160, by, stroke, needle);
   };
   G.drawGauge = function (ctx) {   // 氣壓計：目前握力、各等級刻度、這位玩家的最佳
-    var x = this.sceneW - 70, y = 70, w = 30, h = 330, top = 65, f = this.force || 0, i;
+    var x = this.sceneW - 70, y = 70, w = 30, h = H - 210, top = 65, f = this.force || 0, i;
     roundRect(ctx, x - 5, y - 5, w + 10, h + 10, 14); ctx.fillStyle = 'rgba(10,14,24,0.72)'; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.stroke();
     var fill = clamp(f / top) * h;
@@ -695,19 +695,19 @@
         this.text(ctx, fmtAlt(r.alt), 14, isBest ? GOLD : TEXT, x0 + 226, y - 4, { align: 'right', shadow: false });
         this.text(ctx, r.level ? '等級 ' + r.level + ' ' + L.name : L.name, 11, DIM, x0 + 24, y + 9, { align: 'left', shadow: false, weight: 'normal' });
       }
-      this.drawButton(ctx, this.button('book', x0 + 10, 454, 106, 40, '圖鑑 ' + this.collected() + '/10', { fill: [70, 60, 140] }));
-      this.drawButton(ctx, this.button('swap', x0 + 124, 454, 106, 40, this.confirmSwap > 0 ? '確定換人？' : '換人挑戰',
+      this.drawButton(ctx, this.button('book', x0 + 10, H - 86, 106, 40, '圖鑑 ' + this.collected() + '/10', { fill: [70, 60, 140] }));
+      this.drawButton(ctx, this.button('swap', x0 + 124, H - 86, 106, 40, this.confirmSwap > 0 ? '確定換人？' : '換人挑戰',
         this.confirmSwap > 0 ? { fill: [215, 55, 60], ink: [255, 255, 255] } : {}));
       this.text(ctx, '版本 ' + VERSION, 11, DIM, x0 + 230, H - 12, { align: 'right', shadow: false, weight: 'normal' });
     }
     if (this.panelK > 0.98) {   // 收合時：右緣的「紀錄」小標籤
-      var tb = this.button('panel', W - 40, 190, 40, 120, '');
+      var ty0 = Math.round(H / 2 - 80), tb = this.button('panel', W - 40, ty0, 40, 120, '');
       roundRect(ctx, tb.x, tb.y, tb.w + 14, tb.h, 12); ctx.fillStyle = 'rgba(14,16,30,0.78)'; ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.stroke();
-      this.text(ctx, '◀', 14, GOLD, W - 20, 212, { shadow: false });
-      this.text(ctx, '紀', 17, TEXT, W - 20, 240, { shadow: false });
-      this.text(ctx, '錄', 17, TEXT, W - 20, 262, { shadow: false });
-      this.text(ctx, this.collected() + '/10', 11, DIM, W - 20, 290, { shadow: false, weight: 'normal' });
+      this.text(ctx, '◀', 14, GOLD, W - 20, ty0 + 22, { shadow: false });
+      this.text(ctx, '紀', 17, TEXT, W - 20, ty0 + 50, { shadow: false });
+      this.text(ctx, '錄', 17, TEXT, W - 20, ty0 + 72, { shadow: false });
+      this.text(ctx, this.collected() + '/10', 11, DIM, W - 20, ty0 + 100, { shadow: false, weight: 'normal' });
       this.text(ctx, '版本 ' + VERSION, 11, [210, 215, 225], W - 10, H - 12, { align: 'right', weight: 'normal' });
     }
   };
@@ -742,7 +742,7 @@
 
   G.drawResult = function (ctx) {
     var L = LEVELS[this.level], k = easeOutBack(clamp(this.stateT / 0.4));
-    ctx.save(); ctx.translate(this.sceneW / 2, 250); ctx.scale(k, k);
+    ctx.save(); ctx.translate(this.sceneW / 2, H / 2 - 20); ctx.scale(k, k);
     this.panel(ctx, -230, -130, 460, this.newUnlock ? 260 : 230, 0.8);
     this.text(ctx, this.level ? '等級 ' + this.level + ' / 10' : '再用力一點！', 16, DIM, 0, -105, { shadow: false });
     this.text(ctx, L.name, 40, L.color, 0, -68);
@@ -784,6 +784,8 @@
   };
   G.drawCollection = function (ctx) {
     ctx.fillStyle = 'rgba(5,6,14,0.9)'; ctx.fillRect(0, 0, W, H);
+    var oy = Math.round((H - 540) / 2);
+    ctx.save(); ctx.translate(0, oy);
     this.text(ctx, '圖鑑　' + this.collected() + ' / 10', 26, GOLD, W / 2, 34);
     this.text(ctx, '大家一起收集：飛到哪一層就解鎖那一張・點已解鎖的卡片看飛行過程', 14, DIM, W / 2, 62, { shadow: false });
     for (var i = 1; i <= 10; i++) {
@@ -791,7 +793,7 @@
       roundRect(ctx, x, y, 164, 182, 12);
       ctx.fillStyle = got ? 'rgb(22,24,38)' : 'rgb(30,30,44)'; ctx.fill();
       if (got) {
-        this.button('card' + i, x, y, 164, 182, '');
+        this.button('card' + i, x, y + oy, 164, 182, '');
         ctx.save(); roundRect(ctx, x, y, 164, 182, 12); ctx.clip();
         ctx.drawImage(this.cardArt(i), x, y);
         ctx.restore();
@@ -811,7 +813,8 @@
       ctx.strokeStyle = got ? rgb(L.color) : 'rgba(255,255,255,0.12)'; ctx.lineWidth = got ? 2.5 : 1.5; ctx.stroke();
       this.text(ctx, String(i), 16, got ? L.color : DIM, x + 18, y + 18);
     }
-    this.drawButton(ctx, this.button('closeBook', W / 2 - 70, H - 46, 140, 36, '關閉', { fill: [79, 140, 255], ink: [255, 255, 255] }));
+    ctx.restore();
+    this.drawButton(ctx, this.button('closeBook', W / 2 - 70, 494 + oy, 140, 36, '關閉', { fill: [79, 140, 255], ink: [255, 255, 255] }));
   };
   // 依實際寬度換行；數字、英文、小數點連在一起的部分不拆開（避免「50 / 8 公尺」這種斷法）
   G.wrap = function (ctx, s, maxW, font) {
@@ -868,13 +871,14 @@
         this.text(ctx, '約 ' + fmtAlt(this.altitude), 15, TEXT, cx, 254, { alpha: ra, shadow: false });
       }
     } else if (this.state === 'result') this.drawResult(ctx);
-    if (this.toast) this.text(ctx, this.toast.s, 22, this.toast.color, cx, 200, { alpha: clamp(this.toast.t / 0.4) });
+    if (this.toast) this.text(ctx, this.toast.s, 22, this.toast.color, cx, H / 2 - 70, { alpha: clamp(this.toast.t / 0.4) });
     ctx.restore();
     this.drawSidePanel(ctx);
     if (this.showCollection) this.drawCollection(ctx);
   };
 
-  var api = { VERSION: VERSION, Game: Game, W: W, H: H, LEVELS: LEVELS, levelOf: levelOf, altitudeOf: altitudeOf, fmtAlt: fmtAlt };
+  function setHeight(h) { H = Math.round(clamp(h, H_MIN, H_MAX)); api.H = H; return H; }   // 由 app.js 依螢幕比例設定
+  var api = { VERSION: VERSION, Game: Game, W: W, H: H, setHeight: setHeight, LEVELS: LEVELS, levelOf: levelOf, altitudeOf: altitudeOf, fmtAlt: fmtAlt };
   root.RocketGame = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : this);

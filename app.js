@@ -169,6 +169,7 @@
   // ---------- 畫面縮放（等比例，文字依實際解析度繪製所以清晰） ----------
   function resize() {
     var vw = window.innerWidth, vh = window.innerHeight;
+    H = RocketGame.setHeight(W * vh / vw);   // 高度跟著螢幕比例（4:3 的 iPad 用 960x720），不留上下黑邊
     scale = Math.min(vw / W, vh / H);
     // Retina 最多用 1.5 倍解析度：畫面幾乎看不出差別，iPad Air 2 的繪圖量少一半
     dpr = Math.min(window.devicePixelRatio || 1, 1.5);
