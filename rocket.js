@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '2026.10.19-4';   // 每次發佈都改，畫面右下角會顯示
+  var VERSION = '2026.10.19-5';   // 每次發佈都改，畫面右下角會顯示
   var A = root.RocketArt || (typeof require !== 'undefined' ? require('./art.js') : null);
   var W = 960, H = 540, SCENE_W = 720, PANEL_W = W - SCENE_W, ZONE_PX = 540, CAM0 = 0.4, ART_PAD_X = 440;
   var START_FORCE = 3.0, RELEASE_FORCE = 1.5, PUMP_MIN = 1.0, PEAK_WINDOW = 0.6;
@@ -253,6 +253,8 @@
     if (this.toast) { this.toast.t -= dt; if (this.toast.t <= 0) this.toast = null; }
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
     this.updateParticles(dt);
+    var press = this.state === 'pump' ? clamp(force / 45) : 0;   // 打氣筒握把：握越緊壓越下去，握住就停住，放開彈回
+    this.pumpPress = (this.pumpPress || 0) + (press - (this.pumpPress || 0)) * Math.min(1, dt * (press > (this.pumpPress || 0) ? 10 : 6));
     var target = this.save.panel ? 0 : 1;   // 紀錄欄滑動
     if (this.panelK !== target) { this.panelK = target > this.panelK ? Math.min(1, this.panelK + dt * 5) : Math.max(0, this.panelK - dt * 5); }
     this.layout();
@@ -291,7 +293,7 @@
     this.hist.push([this.time, force]);
     while (this.hist.length && this.hist[0][0] < this.time - PEAK_WINDOW - 0.1) this.hist.shift();
     var ph = this.pumpPhase;
-    this.pumpPhase += dt * (1.6 + Math.min(force, 60) / 25);   // 握越大力打得越快
+    this.pumpPhase += dt * (1.6 + Math.min(force, 60) / 25);   // 瓶內冒氣泡的節奏：握越大力越快（握把不跟著動）
     if (Math.floor(this.pumpPhase) > Math.floor(ph)) {
       this.sfx.play('pump');
       this.bubbles(3);
@@ -635,11 +637,11 @@
   G.drawPump = function (ctx) {   // 發射架、打氣筒與水管（只在地面時畫）
     var by = this.zoneY(0) - 4, s = this.state, rx = this.rocketX;
     if (by > H + 60) return;
-    var stroke = s === 'pump' ? (1 - Math.cos(this.pumpPhase * Math.PI * 2)) / 2 : 0;
+    var stroke = this.pumpPress || 0, needle = s === 'pump' ? clamp((this.force || 0) / 65) : 0;
     ctx.strokeStyle = 'rgb(70,72,80)'; ctx.lineWidth = 3; ctx.lineCap = 'round';   // 三腳發射架
     ctx.beginPath(); ctx.moveTo(rx - 26, by + 4); ctx.lineTo(rx - 4, by - 16); ctx.moveTo(rx + 26, by + 4); ctx.lineTo(rx + 4, by - 16); ctx.moveTo(rx, by + 6); ctx.lineTo(rx, by - 16); ctx.stroke();
     ctx.fillStyle = 'rgb(50,52,58)'; ctx.fillRect(rx - 8, by - 18, 16, 6);
-    A.drawPump(ctx, rx - 160, by, stroke);
+    A.drawPump(ctx, rx - 160, by, stroke, needle);
   };
   G.drawGauge = function (ctx) {   // 氣壓計：目前握力、各等級刻度、這位玩家的最佳
     var x = this.sceneW - 70, y = 70, w = 30, h = 330, top = 65, f = this.force || 0, i;

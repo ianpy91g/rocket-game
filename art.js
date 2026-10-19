@@ -446,7 +446,7 @@
     ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-3, -1, 2, 5);
     void t;
   }
-  function drawPump(ctx, x, groundY, stroke) {   // 金屬打氣筒＋水管
+  function drawPump(ctx, x, groundY, stroke, needle) {   // 金屬打氣筒＋水管；stroke 握把下壓 0～1，needle 壓力錶 0～1
     ctx.strokeStyle = 'rgb(25,25,30)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(x + 12, groundY - 4); ctx.bezierCurveTo(x + 60, groundY + 14, x + 120, groundY + 14, x + 152, groundY - 4); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -458,7 +458,7 @@
     ctx.fillStyle = cg; ctx.fillRect(x - 12, groundY - 96, 24, 88);
     ctx.beginPath(); ctx.arc(x, groundY - 52, 9, 0, Math.PI * 2); ctx.fillStyle = 'rgb(245,245,240)'; ctx.fill();   // 小壓力錶
     ctx.strokeStyle = 'rgb(60,60,60)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, groundY - 52); ctx.lineTo(x + Math.cos(-2.4 + stroke * 2.2) * 7, groundY - 52 + Math.sin(-2.4 + stroke * 2.2) * 7);
+    ctx.beginPath(); ctx.moveTo(x, groundY - 52); ctx.lineTo(x + Math.cos(-2.4 + needle * 3.2) * 7, groundY - 52 + Math.sin(-2.4 + needle * 3.2) * 7);
     ctx.strokeStyle = 'rgb(200,40,40)'; ctx.lineWidth = 1.5; ctx.stroke();
     var hy = groundY - 96 - 42 + stroke * 36;
     var rg = ctx.createLinearGradient(x - 3, 0, x + 3, 0);
