@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '2026.10.19-2';   // 每次發佈都改，畫面右下角會顯示
+  var VERSION = '2026.10.19-3';   // 每次發佈都改，畫面右下角會顯示
   var A = root.RocketArt || (typeof require !== 'undefined' ? require('./art.js') : null);
   var W = 960, H = 540, SCENE_W = 720, PANEL_W = W - SCENE_W, ZONE_PX = 540, CAM0 = 0.4, ART_PAD_X = 440;
   var START_FORCE = 3.0, RELEASE_FORCE = 1.5, PUMP_MIN = 1.0, PEAK_WINDOW = 0.6;
@@ -629,11 +629,14 @@
     var x = this.sceneW - 70, y = 70, w = 30, h = 330, top = 65, f = this.force || 0, i;
     roundRect(ctx, x - 5, y - 5, w + 10, h + 10, 14); ctx.fillStyle = 'rgba(10,14,24,0.72)'; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.stroke();
-    var fill = clamp(f / top) * h, lv = levelOf(f);
+    var fill = clamp(f / top) * h;
     if (fill > 0) {
-      var c = LEVELS[lv].color, g = ctx.createLinearGradient(x, 0, x + w, 0);
-      g.addColorStop(0, rgb(shade(c, -0.25))); g.addColorStop(0.35, rgb(shade(c, 0.35))); g.addColorStop(1, rgb(shade(c, -0.35)));
+      var g = ctx.createLinearGradient(0, y + h, 0, y);   // 整條固定的冷→熱漸層，不對應等級
+      g.addColorStop(0, 'rgb(70,150,255)'); g.addColorStop(0.35, 'rgb(60,210,220)'); g.addColorStop(0.7, 'rgb(255,200,70)'); g.addColorStop(1, 'rgb(255,100,60)');
       roundRect(ctx, x, y + h - fill, w, fill, 10); ctx.fillStyle = g; ctx.fill();
+      var sh = ctx.createLinearGradient(x, 0, x + w, 0);   // 圓柱立體感
+      sh.addColorStop(0, 'rgba(0,0,0,0.25)'); sh.addColorStop(0.35, 'rgba(255,255,255,0.25)'); sh.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = sh; ctx.fill();
     }
     roundRect(ctx, x + 4, y + 6, 5, h - 12, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();   // 玻璃反光
     for (i = 10; i <= 55; i += 5) {
@@ -645,7 +648,7 @@
       var byy = y + h - clamp(this.save.best.force / top) * h;
       polygon(ctx, [[x + w + 6, byy], [x + w + 16, byy - 6], [x + w + 16, byy + 6]], rgb(GOLD));
     }
-    this.text(ctx, f.toFixed(1), 30, lv ? LEVELS[lv].color : TEXT, x + w / 2, y - 30);
+    this.text(ctx, f.toFixed(1), 30, TEXT, x + w / 2, y - 30);
   };
 
   G.drawSidePanel = function (ctx) {
@@ -708,10 +711,10 @@
       this.text(ctx, '握緊握力球打氣，放開就發射！', 22, TEXT, cx, 92);
       this.text(ctx, '至少握住 1 秒・放開那一刻的握力決定高度', 14, [200, 200, 215], cx, 118, { shadow: false });
     } else if (s === 'pump') {
-      var lv = levelOf(Math.max(f, this.recentPeak())), L = LEVELS[lv], ok = this.pumpT >= PUMP_MIN;
+      var ok = this.pumpT >= PUMP_MIN;   // 打氣時不透露會飛到哪一層，留到發射後揭曉
       this.panel(ctx, cx - 210, 70, 420, 82, 0.65);
       this.text(ctx, ok ? '✔ 可以放開了！' : '打氣中… ' + this.pumpT.toFixed(1) + ' / 1.0 秒', 22, ok ? GREEN : GOLD, cx, 94);
-      this.text(ctx, '現在放開：' + (lv ? '等級 ' + lv + ' ' + L.name : '發射失敗（握力要 10 以上）'), 16, L.color, cx, 124);
+      this.text(ctx, ok ? '放開那一刻的握力決定高度，會飛到哪裡呢？' : '繼續握緊，打足氣再放開', 16, [205, 210, 225], cx, 124);
       roundRect(ctx, cx - 160, 140, 320, 6, 3); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
       roundRect(ctx, cx - 160, 140, 320 * clamp(this.pumpT / PUMP_MIN), 6, 3); ctx.fillStyle = rgb(ok ? GREEN : GOLD); ctx.fill();
     }
