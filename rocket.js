@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '2026.10.19-3';   // 每次發佈都改，畫面右下角會顯示
+  var VERSION = '2026.10.19-4';   // 每次發佈都改，畫面右下角會顯示
   var A = root.RocketArt || (typeof require !== 'undefined' ? require('./art.js') : null);
   var W = 960, H = 540, SCENE_W = 720, PANEL_W = W - SCENE_W, ZONE_PX = 540, CAM0 = 0.4, ART_PAD_X = 440;
   var START_FORCE = 3.0, RELEASE_FORCE = 1.5, PUMP_MIN = 1.0, PEAK_WINDOW = 0.6;
@@ -262,6 +262,7 @@
       if (!this.showCollection && !this.waitRelease && force >= START_FORCE) this.startPump();
     } else if (s === 'pump') this.updatePump(dt, force);
     else if (s === 'flight') this.updateFlight(dt);
+    else if (s === 'result' && this.replay) { if (this.stateT > 1.2) this.endReplay(); }
     else if (s === 'result') {
       // 再握一下就直接開始下一次打氣（要先放開過，避免發射那一下的餘力觸發）
       if (!this.showCollection && this.armed && this.stateT > 0.8 && force >= START_FORCE) { this.toReady(); this.startPump(); }
@@ -307,11 +308,8 @@
   };
   G.launch = function (force) {
     var lv = levelOf(force), alt = altitudeOf(force);
-    this.state = 'flight'; this.flightT = 0;
-    this.launchForce = force; this.level = lv; this.altitude = alt;
-    this.targetZ = lv === 0 ? 0.08 : lv + 0.05 + fracInLevel(force) * 0.85;
-    this.flightDur = lv === 0 ? 2.2 : 2.6 + lv * 0.55;
-    this.zR = 0; this.rocketAngle = 0; this.zoneShown = 0; this.chute = false;
+    this.replay = 0;
+    this.startFlight(force);
     this.waitRelease = true;
     // 紀錄
     var rec = { force: Math.round(force * 10) / 10, alt: alt, level: lv };
@@ -326,6 +324,22 @@
     if (lv === 0) { this.sfx.play('fail'); this.splash(18, 0.6); }
     else { this.sfx.play('launch'); if (this.music) this.music.duck(this.flightDur); }
   };
+  G.startFlight = function (force) {   // 飛行設定：真的發射和圖鑑重播共用
+    var lv = levelOf(force);
+    this.state = 'flight'; this.flightT = 0; this.particles = [];
+    this.launchForce = force; this.level = lv; this.altitude = altitudeOf(force);
+    this.targetZ = lv === 0 ? 0.08 : lv + 0.05 + fracInLevel(force) * 0.85;
+    this.flightDur = lv === 0 ? 2.2 : 2.6 + lv * 0.55;
+    this.zR = 0; this.rocketAngle = 0; this.zoneShown = 0; this.chute = false; this.banner = null;
+  };
+  G.startReplay = function (n) {   // 圖鑑重播：從發射台飛到第 n 層，不寫入紀錄
+    var L = LEVELS[n];
+    this.showCollection = false; this.toast = null;
+    this.replay = n; this.newUnlock = false; this.newBest = false;
+    this.startFlight(n === 10 ? 75 : L.lo + (L.hi - L.lo) * 0.6);   // 外太空就一路飛到月球
+    this.sfx.play('launch'); if (this.music) this.music.duck(this.flightDur);
+  };
+  G.endReplay = function () { this.replay = 0; this.toReady(); this.showCollection = true; };
   G.updateFlight = function (dt) {
     this.flightT += dt;
     var t = this.flightT, lv = this.level;
@@ -405,10 +419,12 @@
   G.tap = function (x, y) {
     var id = this.hit(x, y);
     if (!id) {
-      if (this.state === 'result' && x < this.sceneW) { this.toReady(); return true; }
+      if (this.state === 'result' && !this.replay && x < this.sceneW) { this.toReady(); return true; }
       return false;
     }
-    if (this.showCollection && id !== 'closeBook') return true;   // 圖鑑開著時只能關閉
+    if (this.showCollection && id.indexOf('card') === 0) { this.startReplay(+id.slice(4)); return true; }
+    if (this.showCollection && id !== 'closeBook') return true;   // 圖鑑開著時只能關閉或點卡片
+    if (id === 'skipReplay') { this.endReplay(); return true; }
     if (id === 'grip') this.env.connectGrip();
     else if (id === 'music') this.toggleMusic();
     else if (id === 'book') this.showCollection = true;
@@ -433,7 +449,7 @@
     if (!down) return;
     if (code === 'KeyM') this.toggleMusic();
     else if (code === 'KeyB') this.showCollection = !this.showCollection;
-    else if (code === 'Escape') this.showCollection = false;
+    else if (code === 'Escape') { if (this.replay) this.endReplay(); else this.showCollection = false; }
     else if (code === 'KeyR') this.togglePanel();
   };
 
@@ -767,12 +783,13 @@
   G.drawCollection = function (ctx) {
     ctx.fillStyle = 'rgba(5,6,14,0.9)'; ctx.fillRect(0, 0, W, H);
     this.text(ctx, '圖鑑　' + this.collected() + ' / 10', 26, GOLD, W / 2, 34);
-    this.text(ctx, '大家一起收集：飛到哪一層就解鎖那一張', 14, DIM, W / 2, 62, { shadow: false });
+    this.text(ctx, '大家一起收集：飛到哪一層就解鎖那一張・點已解鎖的卡片看飛行過程', 14, DIM, W / 2, 62, { shadow: false });
     for (var i = 1; i <= 10; i++) {
       var col = (i - 1) % 5, row = Math.floor((i - 1) / 5), x = 40 + col * 180, y = 86 + row * 196, L = LEVELS[i], got = !!this.save.collection[i];
       roundRect(ctx, x, y, 164, 182, 12);
       ctx.fillStyle = got ? 'rgb(22,24,38)' : 'rgb(30,30,44)'; ctx.fill();
       if (got) {
+        this.button('card' + i, x, y, 164, 182, '');
         ctx.save(); roundRect(ctx, x, y, 164, 182, 12); ctx.clip();
         ctx.drawImage(this.cardArt(i), x, y);
         ctx.restore();
@@ -780,6 +797,10 @@
         this.text(ctx, '約 ' + fmtAlt(L.alt[0]) + (i < 10 ? ' 起' : ' 以上'), 13, L.color, x + 82, y + 114, { shadow: false });
         var lines = this.wrap(ctx, L.desc, 144, 'normal 12px ' + FONT);
         for (var j = 0; j < lines.length && j < 3; j++) this.text(ctx, lines[j], 12, [215, 218, 228], x + 82, y + 134 + j * 16, { weight: 'normal', shadow: false });
+        ctx.save(); ctx.globalAlpha = 0.85;   // 播放鍵
+        ctx.beginPath(); ctx.arc(x + 146, y + 18, 11, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+        polygon(ctx, [[x + 142, y + 12], [x + 142, y + 24], [x + 152, y + 18]], 'rgb(255,255,255)');
+        ctx.restore();
       } else {
         this.text(ctx, '?', 48, DIM, x + 82, y + 80);
         this.text(ctx, '握力 ' + L.lo + (i < 10 ? '～' + (L.hi - 1) : ' 以上'), 14, DIM, x + 82, y + 140, { shadow: false });
@@ -833,7 +854,18 @@
       this.text(ctx, fmtAlt(Math.min(cur, this.altitude)), 30, TEXT, sw - 120, H - 40);
     }
     this.drawHints(ctx);
-    if (this.state === 'result') this.drawResult(ctx);
+    if (this.replay) {
+      var RL = LEVELS[this.replay];
+      this.panel(ctx, 12, 12, 300, 40, 0.6);
+      this.text(ctx, '圖鑑重播・等級 ' + this.replay + ' ' + RL.name, 16, RL.color, 162, 32, { shadow: false });
+      this.drawButton(ctx, this.button('skipReplay', sw - 112, 12, 100, 36, '跳過 ✕', { size: 15 }));
+      if (this.state === 'result') {
+        var ra = clamp(this.stateT / 0.3);
+        this.panel(ctx, cx - 180, 200, 360, 70, 0.75 * ra);
+        this.text(ctx, '抵達 ' + RL.name, 26, RL.color, cx, 224, { alpha: ra });
+        this.text(ctx, '約 ' + fmtAlt(this.altitude), 15, TEXT, cx, 254, { alpha: ra, shadow: false });
+      }
+    } else if (this.state === 'result') this.drawResult(ctx);
     if (this.toast) this.text(ctx, this.toast.s, 22, this.toast.color, cx, 200, { alpha: clamp(this.toast.t / 0.4) });
     ctx.restore();
     this.drawSidePanel(ctx);
